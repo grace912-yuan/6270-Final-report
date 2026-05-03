@@ -1,0 +1,443 @@
+---
+title: "6270 - Final Report"
+subtitle: "Outbreak Characteristics Associated With Reported Illnesses in the National Outbreak Reporting System"
+author: "Mengzhi Yuan"
+date: "`r Sys.Date()`"
+editor_options:
+  chunk_output_type: console
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 1
+    number_sections: true
+urlcolor: blue
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+
+# Packages
+
+```{r packages}
+
+# Required packages
+library(tidyverse)
+library(knitr)
+
+```
+
+# Introduction
+
+## Research Question
+
+**This report examines whether income inequality and mean years of schooling are associated with life expectancy across countries in 2022.** 
+
+## Scientific Plausibility and Context
+
+Disease outbreaks can vary substantially in size. Some outbreaks involve only a few reported illnesses, while others affect many people across a shared setting or exposure source. This variation is scientifically plausible because the number of reported illnesses may depend on how the outbreak is transmitted and where the outbreak occurs. For example, outbreaks linked to shared food exposures, person-to-person transmission, or institutional settings may create different opportunities for exposure, spread, detection, and reporting.
+
+The National Outbreak Reporting System (NORS) is a CDC surveillance system used by local, state, and territorial health departments in the United States to report disease outbreaks to CDC. NORS includes foodborne and waterborne disease outbreaks, as well as enteric illness outbreaks transmitted through environmental sources, infected people or animals, or unknown modes of transmission.[@cdc_nors_about] The dataset used in this report was obtained from the CDC NORS open data page.[@cdc_nors_data]
+
+Understanding whether reported outbreak size differs by transmission mode and outbreak setting is relevant to public health surveillance and response. If certain transmission modes or settings are associated with larger reported outbreaks, public health agencies may prioritize prevention, early detection, and outbreak control efforts in those contexts. However, NORS data represent reported outbreaks rather than all outbreaks that occur, so findings should be interpreted as patterns among reported outbreaks rather than as estimates of true outbreak risk in the general population.[@white2022; @wikswo2022]
+
+# Material and Methods
+
+## Data
+
+```{r data code, results='hide',echo=FALSE, message=FALSE, warning=FALSE}
+
+# Load data
+nors_raw <- read_csv("data/NORS_20260501.csv")
+
+# Clean and select variables for this analysis
+nors_analysis <- nors_raw %>%
+  mutate(
+    illnesses = readr::parse_number(as.character(Illnesses)),
+    hospitalizations = readr::parse_number(as.character(Hospitalizations)),
+    deaths = readr::parse_number(as.character(Deaths)),
+    primary_mode = `Primary Mode`,
+    setting = Setting,
+    year = Year,
+    month = Month,
+    state = State,
+    etiology = Etiology
+  ) %>%
+  select(
+    year, month, state, primary_mode, setting, etiology,
+    illnesses, hospitalizations, deaths
+  ) %>%
+  filter(
+    !is.na(illnesses),
+    !is.na(primary_mode),
+    !is.na(setting)
+  )
+
+# Sample sizes
+n_raw <- nrow(nors_raw)
+n_analysis <- nrow(nors_analysis)
+
+```
+
+The data for this report were obtained from the Centers for Disease Control and Prevention (CDC) National Outbreak Reporting System (NORS) open data page: https://data.cdc.gov/Foodborne-Waterborne-and-Related-Diseases/NORS/5xkq-dg7x/data_preview. NORS is a surveillance system used to report disease outbreaks, including foodborne, waterborne, person-to-person, animal contact, environmental, and unknown or indeterminate transmission modes.[@cdc_nors_about]
+
+The original dataset contained 66,713 outbreak records. Each row represents a reported outbreak, not an individual person. The dataset includes information on the year, month, state, primary transmission mode, suspected or confirmed etiology, outbreak setting, reported illnesses, hospitalizations, deaths, food vehicle, water exposure, and animal exposure when available.
+
+For this analysis, the outcome variable was the reported number of illnesses in each outbreak (Illnesses). The main explanatory variables were primary transmission mode (Primary Mode) and outbreak setting (Setting). These variables were selected because the research question focuses on whether reported outbreak size differs by how the outbreak was transmitted and where it occurred.
+
+Several variables were cleaned before analysis. The illness, hospitalization, and death variables were converted to numeric format because they were read as mixed or character variables in R. The analytic dataset was then restricted to outbreak records with non-missing values for reported illnesses, primary transmission mode, and outbreak setting. After these cleaning steps, the final analytic dataset included 60,752 reported outbreaks.
+
+## Statistical Analyses
+
+The analysis first described the distribution of reported illnesses overall and by outbreak characteristics. Because Illnesses is a count variable and outbreak sizes were expected to be right-skewed, descriptive statistics included the median and interquartile range (IQR), in addition to the mean and standard deviation. The distribution of reported illnesses was also examined visually before selecting statistical tests.
+
+The primary analysis compared reported illnesses across categories of primary transmission mode and outbreak setting. Because the outcome was a skewed count variable and the main explanatory variables were categorical, Kruskal-Wallis tests were used to evaluate whether reported illnesses differed across groups. This nonparametric approach was selected because it does not require the outcome to be normally distributed and is appropriate for comparing a continuous or count outcome across more than two independent groups. When the overall Kruskal-Wallis test suggested group differences, pairwise Wilcoxon rank-sum tests with Benjamini-Hochberg adjustment were used for post-hoc comparisons to account for multiple testing.
+
+Because outbreak setting had many categories, the most common setting categories were retained for clearer interpretation, and less frequent categories were grouped as “Other.” This helped avoid unstable comparisons among very small groups and improved the readability of the results and visualizations.
+
+As a secondary analysis, a linear regression model was fit using the log-transformed illness count, "log1p(Illnesses)", as the outcome. This model was used to examine whether transmission mode and outbreak setting were associated with reported outbreak size after accounting for both variables in the same model. The log transformation was used because raw reported illness counts were right-skewed. Before interpreting the regression results, model assumptions were checked using residuals-versus-fitted plots, Q-Q plots, and residual summaries. These diagnostics were used to assess whether the model reasonably met assumptions of linearity on the transformed scale, approximate normality of residuals, homoscedasticity, and absence of highly influential observations.
+
+All analyses were conducted in R. Statistical significance was evaluated at Alpha = 0.05, but practical significance was also considered by comparing group medians, IQRs, and the magnitude of differences in reported illnesses. Because the data are observational outbreak reports, the results were interpreted as associations among reported outbreaks rather than evidence of causation.
+
+## Code
+
+This final project includes an interactive Shiny App that allows users to explore NORS foodborne outbreak patterns across years, states, etiologies, and outbreak outcomes.
+
+- Shiny App: [NORS Foodborne Outbreak Dashboard](https://grace912.shinyapps.io/6270-final-project/)
+- GitHub Repository: [6270 Final Report](https://github.com/grace912-yuan/6270-Final-report)
+
+# Result
+
+## Descriptive Statistics
+
+### Table 1
+
+```{r descriptive-statistics, echo=FALSE, message=FALSE, warning=FALSE}
+
+#For numeric outbreak outcomes
+descriptive_table <- nors_analysis %>%
+  summarise(
+    Variable = c("Reported illnesses", "Hospitalizations", "Deaths"),
+    N = c(
+      sum(!is.na(illnesses)),
+      sum(!is.na(hospitalizations)),
+      sum(!is.na(deaths))
+    ),
+    Mean = c(
+      mean(illnesses, na.rm = TRUE),
+      mean(hospitalizations, na.rm = TRUE),
+      mean(deaths, na.rm = TRUE)
+    ),
+    SD = c(
+      sd(illnesses, na.rm = TRUE),
+      sd(hospitalizations, na.rm = TRUE),
+      sd(deaths, na.rm = TRUE)
+    ),
+    Median = c(
+      median(illnesses, na.rm = TRUE),
+      median(hospitalizations, na.rm = TRUE),
+      median(deaths, na.rm = TRUE)
+    ),
+    IQR = c(
+      IQR(illnesses, na.rm = TRUE),
+      IQR(hospitalizations, na.rm = TRUE),
+      IQR(deaths, na.rm = TRUE)
+    ),
+    Minimum = c(
+      min(illnesses, na.rm = TRUE),
+      min(hospitalizations, na.rm = TRUE),
+      min(deaths, na.rm = TRUE)
+    ),
+    Maximum = c(
+      max(illnesses, na.rm = TRUE),
+      max(hospitalizations, na.rm = TRUE),
+      max(deaths, na.rm = TRUE)
+    )
+  )
+
+knitr::kable(
+  descriptive_table,
+  digits = 2,
+  caption = "Descriptive statistics for reported illnesses, hospitalizations, and deaths among outbreaks included in the analytic dataset."
+)
+```
+Table 1 summarizes the main numeric outbreak outcomes in the analytic dataset. Reported illnesses were available for all 60,752 outbreaks included in the analysis because records with missing illness counts were excluded during data cleaning. Hospitalizations and deaths had fewer complete observations, indicating that these outcomes were not reported for every outbreak.
+The reported number of illnesses was right-skewed. The mean number of reported illnesses was 24.70, while the median was 13, and the maximum was 990. This indicates that most reported outbreaks involved a relatively small number of illnesses, but a smaller number of large outbreaks increased the mean. Because of this skewed distribution, median and IQR were emphasized when comparing outbreak size across transmission modes and settings.
+
+## Illness-distribution
+
+### Figure 1
+
+```{r illness-distribution, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Figure 1. Distribution of reported illnesses per outbreak in the analytic dataset. The x-axis is limited to 200 illnesses to improve readability because a small number of outbreaks had very large reported illness counts."}
+ggplot(nors_analysis, aes(x = illnesses)) +
+  geom_histogram(binwidth = 5, boundary = 0, color = "white") +
+  coord_cartesian(xlim = c(0, 200)) +
+  labs(
+    x = "Reported illnesses per outbreak",
+    y = "Number of outbreaks"
+  ) +
+  theme_minimal()
+```
+Figure 1 shows that the distribution of reported illnesses was strongly right-skewed. Most reported outbreaks involved relatively small illness counts, while a smaller number of outbreaks involved much larger illness counts. This pattern is consistent with Table 1, where the mean number of illnesses was higher than the median. Because the distribution was not approximately normal and included high-value outliers, median and IQR were emphasized when describing outbreak size, and nonparametric tests were used for the main group comparisons.
+
+## Reported Illnesses by Transmission Mode
+
+### Table 2
+
+```{r transmission-mode-table, echo=FALSE, message=FALSE, warning=FALSE}
+mode_summary <- nors_analysis %>%
+  group_by(primary_mode) %>%
+  summarise(
+    N = n(),
+    Median = median(illnesses, na.rm = TRUE),
+    IQR = IQR(illnesses, na.rm = TRUE),
+    Mean = mean(illnesses, na.rm = TRUE),
+    SD = sd(illnesses, na.rm = TRUE),
+    Minimum = min(illnesses, na.rm = TRUE),
+    Maximum = max(illnesses, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(N))
+
+knitr::kable(
+  mode_summary,
+  digits = 2,
+  caption = "Reported illnesses per outbreak by primary transmission mode."
+)
+```
+Table 2 summarizes reported illnesses by primary transmission mode. Person-to-person outbreaks were the most common in the analytic dataset (n = 28,922) and had the highest median number of reported illnesses per outbreak (median = 20, IQR = 26). Foodborne outbreaks were also common (n = 23,448), but their median reported illness count was lower (median = 7, IQR = 15). Waterborne outbreaks had a lower median illness count (median = 9), but a much higher mean and standard deviation, suggesting that some waterborne outbreaks were substantially larger than typical waterborne outbreaks. Overall, the table shows that outbreak size differed across transmission modes and that medians and IQRs are more informative than means alone because illness counts were strongly skewed.
+
+### Figure 2
+```{r transmission-mode-boxplot, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Figure 2. Reported illnesses per outbreak by primary transmission mode. The y-axis is limited to 200 illnesses to improve readability because a small number of outbreaks had much larger reported illness counts."}
+ggplot(nors_analysis, aes(x = fct_reorder(primary_mode, illnesses, .fun = median, na.rm = TRUE), y = illnesses)) +
+  geom_boxplot(outlier.alpha = 0.2) +
+  coord_cartesian(ylim = c(0, 200)) +
+  labs(
+    x = "Primary transmission mode",
+    y = "Reported illnesses per outbreak"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1)
+  )
+```
+Figure 2 visually compares the distribution of reported illnesses across primary transmission modes. The boxplots show that person-to-person outbreaks generally had higher reported illness counts than the other transmission modes, based on the higher median and wider distribution. All transmission modes showed high-value outliers, indicating that very large outbreaks occurred across multiple modes even when the typical outbreak size was smaller. This pattern supports the use of a nonparametric group comparison because reported illness counts were skewed and not normally distributed.
+
+### Table 3: Transmission Kruskal-Wallis test
+
+The assumptions for the Kruskal-Wallis test were considered. The outcome variable, reported illnesses, was numeric. The grouping variable, primary transmission mode, was categorical with more than two independent groups. Each outbreak record was treated as an independent reported outbreak. Because the illness count distribution was strongly right-skewed, a nonparametric test was more appropriate than a standard one-way ANOVA for the primary group comparison.
+```{r transmission-mode-kruskal, echo=FALSE, message=FALSE, warning=FALSE}
+mode_kw <- kruskal.test(illnesses ~ primary_mode, data = nors_analysis)
+
+mode_kw_table <- tibble(
+  Test = "Kruskal-Wallis test",
+  `Chi-squared` = unname(mode_kw$statistic),
+  df = unname(mode_kw$parameter),
+  `p-value` = format.pval(mode_kw$p.value, digits = 3, eps = 0.001)
+)
+
+knitr::kable(
+  mode_kw_table,
+  digits = 3,
+  caption = "Kruskal-Wallis test comparing reported illnesses across primary transmission modes."
+)
+```
+The Table 3 showed a statistically significant difference in reported illnesses across primary transmission modes, X²(5) = 8573.75, p < 0.001. This means that the distribution of reported illness counts was not the same across all transmission mode groups. In practical terms, the largest difference was seen between person-to-person outbreaks, which had a median of 20 reported illnesses, and foodborne or animal contact outbreaks, which had lower medians. However, this result should be interpreted as an association among reported outbreaks, not evidence that transmission mode alone causes larger outbreaks.
+
+## Reported Illnesses by Outbreak Setting
+
+```{r setting-group, echo=FALSE, message=FALSE, warning=FALSE}
+# Group less common outbreak settings as "Other" for clearer tables and figures
+nors_analysis <- nors_analysis %>%
+  mutate(
+    setting_group = forcats::fct_lump_n(as.factor(setting), n = 10, other_level = "Other")
+  )
+```
+
+### Table 4
+
+```{r setting-table, echo=FALSE, message=FALSE, warning=FALSE}
+setting_summary <- nors_analysis %>%
+  group_by(setting_group) %>%
+  summarise(
+    N = n(),
+    Median = median(illnesses, na.rm = TRUE),
+    IQR = IQR(illnesses, na.rm = TRUE),
+    Mean = mean(illnesses, na.rm = TRUE),
+    SD = sd(illnesses, na.rm = TRUE),
+    Minimum = min(illnesses, na.rm = TRUE),
+    Maximum = max(illnesses, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(N))
+
+knitr::kable(
+  setting_summary,
+  digits = 2,
+  caption = "Reported illnesses per outbreak by outbreak setting. Less common setting categories were grouped as Other."
+)
+```
+Table 4 summarizes reported illnesses by outbreak setting. Long-term care, nursing home, or assisted living facilities were the most common setting group in the analytic dataset (n = 21,224), with a median of 22 reported illnesses per outbreak (IQR = 26). School, college, or university outbreaks had the highest median reported illness count among the listed setting groups (median = 25, IQR = 46), suggesting that reported outbreaks in educational settings tended to involve larger numbers of illnesses. Restaurant-related settings had lower median illness counts, with medians of 5 illnesses per outbreak for restaurant, restaurant: other, and restaurant: sit-down dining groups. The large maximum values across several settings show that unusually large outbreaks occurred in multiple settings, even when the typical outbreak size was smaller.
+
+### Figure 3
+
+```{r setting-boxplot, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Figure 3. Reported illnesses per outbreak by outbreak setting. Less common settings were grouped as Other, and the y-axis is limited to 200 illnesses to improve readability because a small number of outbreaks had much larger reported illness counts."}
+ggplot(nors_analysis, aes(x = fct_reorder(setting_group, illnesses, .fun = median, na.rm = TRUE), y = illnesses)) +
+  geom_boxplot(outlier.alpha = 0.2) +
+  coord_cartesian(ylim = c(0, 200)) +
+  labs(
+    x = "Outbreak setting",
+    y = "Reported illnesses per outbreak"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 40, hjust = 1)
+  )
+```
+Figure 3 visually compares the distribution of reported illnesses across outbreak settings. The boxplots show that school, college, or university settings and long-term care, nursing home, or assisted living facilities generally had higher reported illness counts than restaurant and private home settings. Several setting groups also had many high-value outliers, showing that large outbreaks occurred across different contexts. This visual pattern supports the use of a nonparametric test because reported illness counts were skewed and varied widely within setting groups.
+
+### Table 5
+The assumptions for the Kruskal-Wallis test were considered. Reported illnesses was a numeric outcome, and outbreak setting was a categorical grouping variable with more than two independent groups. Each row represented a separate reported outbreak. Because the illness count distribution was strongly right-skewed and included high-value outliers, the Kruskal-Wallis test was more appropriate than a standard one-way ANOVA for this comparison.
+
+```{r setting-kruskal, echo=FALSE, message=FALSE, warning=FALSE}
+setting_kw <- kruskal.test(illnesses ~ setting_group, data = nors_analysis)
+
+setting_kw_table <- tibble(
+  Test = "Kruskal-Wallis test",
+  `Chi-squared` = unname(setting_kw$statistic),
+  df = unname(setting_kw$parameter),
+  `p-value` = format.pval(setting_kw$p.value, digits = 3, eps = 0.001)
+)
+
+knitr::kable(
+  setting_kw_table,
+  digits = 3,
+  caption = "Kruskal-Wallis test comparing reported illnesses across outbreak setting groups."
+)
+```
+Table 5 shows that reported illnesses differed significantly across outbreak setting groups, X²(9) = 13,818.29, p < 0.001. Since this p-value is below the Alpha = 0.05 threshold, the result provides statistical evidence that the distribution of reported illness counts was not the same across all setting groups. Practically, the largest differences were seen between settings such as school, college, or university and long-term care facilities, which had higher median illness counts, and restaurant or private home settings, which had lower median illness counts. This finding suggests that outbreak setting was associated with reported outbreak size among NORS-reported outbreaks, but it should not be interpreted as evidence that setting alone causes larger outbreaks.
+
+## Secondary regerssion check
+
+```{r regression-model, echo=FALSE, message=FALSE, warning=FALSE}
+# Prepare variables for secondary regression analysis
+nors_analysis <- nors_analysis %>%
+  mutate(
+    log_illnesses = log1p(illnesses),
+    primary_mode = as.factor(primary_mode),
+    setting_group = as.factor(setting_group)
+  )
+
+# Fit secondary linear regression model using log-transformed illness counts
+illness_lm <- lm(log_illnesses ~ primary_mode + setting_group, data = nors_analysis)
+
+# Create diagnostic dataset
+diagnostic_data <- tibble(
+  fitted_values = fitted(illness_lm),
+  residuals = residuals(illness_lm),
+  standardized_residuals = rstandard(illness_lm)
+)
+```
+
+Because the raw illness count was strongly right-skewed, a secondary linear regression model used "log1p(Illnesses)" as the outcome. Before interpreting this regression model, diagnostic plots were examined to assess whether the model assumptions were reasonably met.
+
+### Figure 4
+```{r residuals-fitted-plot, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Figure 4. Residuals-versus-fitted plot for the secondary regression model using log-transformed reported illnesses."}
+ggplot(diagnostic_data, aes(x = fitted_values, y = residuals)) +
+  geom_point(alpha = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    x = "Fitted values",
+    y = "Residuals"
+  ) +
+  theme_minimal()
+```
+Figure 4 shows the residuals-versus-fitted plot for the secondary regression model using log-transformed reported illnesses. The residuals were generally centered around zero, but the spread was not completely even across fitted values and there were visible vertical bands because the predictors were categorical. This suggests that the log transformation improved the outcome scale, but the homoscedasticity assumption was only partially met. Therefore, the regression model was interpreted as a secondary analysis.
+
+### Figure 5
+```{r qq-plot, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Figure 5. Q-Q plot of standardized residuals from the secondary regression model using log-transformed reported illnesses."}
+ggplot(diagnostic_data, aes(sample = standardized_residuals)) +
+  stat_qq(alpha = 0.3) +
+  stat_qq_line() +
+  labs(
+    x = "Theoretical quantiles",
+    y = "Standardized residuals"
+  ) +
+  theme_minimal()
+```
+Figure 5 shows the Q-Q plot of standardized residuals from the secondary regression model. The residuals followed the reference line near the center of the distribution but showed clear deviations in both tails, especially the upper tail. This indicates that the normality assumption was not fully met, even after log transformation. Because of these diagnostic results, the Kruskal-Wallis tests remained the primary analyses, while the regression model was used only as a supplemental way to examine associations while including transmission mode and setting in the same model.
+
+Overall, the regression diagnostics showed that the linear regression assumptions were only partially met. The residuals were centered around zero, but normality and constant variance were not fully satisfied. For this reason, the nonparametric Kruskal-Wallis tests were treated as the main statistical approach, and the regression results were interpreted as supportive rather than definitive evidence.
+
+### Table 6
+```{r regression-results-table, echo=FALSE, message=FALSE, warning=FALSE}
+# Create regression coefficient table
+regression_table <- summary(illness_lm)$coefficients %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Term") %>%
+  rename(
+    Estimate = Estimate,
+    `Standard Error` = `Std. Error`,
+    `t value` = `t value`,
+    `p-value` = `Pr(>|t|)`
+  ) %>%
+  mutate(
+    `p-value` = format.pval(`p-value`, digits = 3, eps = 0.001)
+  )
+
+knitr::kable(
+  regression_table,
+  digits = 3,
+  caption = "Secondary linear regression model predicting log-transformed reported illnesses by primary transmission mode and outbreak setting."
+)
+```
+Table 6 presents the secondary linear regression model using log-transformed reported illnesses as the outcome. This model included both primary transmission mode and outbreak setting, so it examined whether each variable was associated with reported outbreak size while accounting for the other variable. Because the model outcome was "log1p(Illnesses)", the coefficients represent differences on the log illness-count scale rather than direct differences in the number of reported illnesses.
+
+Several transmission modes remained statistically associated with log-transformed reported illnesses in the secondary model. Compared with the reference transmission mode, person-to-person outbreaks had a higher log-transformed illness count (estimate = 0.304, p < 0.001), and foodborne outbreaks also had a higher log-transformed illness count (estimate = 0.174, p < 0.001). Indeterminate or unknown transmission mode had a lower log-transformed illness count (estimate = -0.196, p < 0.001). These findings are generally consistent with the descriptive results showing that reported outbreak size differed by transmission mode.
+
+Outbreak setting was also associated with log-transformed reported illnesses. School, college, or university settings had a higher log-transformed illness count compared with the reference setting group (estimate = 0.166, p < 0.001), while several restaurant-related settings and private home or residence settings had lower log-transformed illness counts. These results support the earlier descriptive finding that outbreak size varied across settings, with educational and long-term care-related settings generally showing larger typical outbreak sizes than restaurant or private home settings.
+
+### Table 7
+```{r regression-model-fit, echo=FALSE, message=FALSE, warning=FALSE}
+model_summary <- summary(illness_lm)
+
+model_fit_table <- tibble(
+  `Model` = "log1p(Illnesses) ~ Primary Mode + Setting Group",
+  `R-squared` = model_summary$r.squared,
+  `Adjusted R-squared` = model_summary$adj.r.squared,
+  `Residual standard error` = model_summary$sigma
+)
+
+knitr::kable(
+  model_fit_table,
+  digits = 3,
+  caption = "Model fit statistics for the secondary regression analysis."
+)
+```
+Table 7 summarizes the model fit for the secondary regression analysis. Primary transmission mode and outbreak setting together explained about 22.1% of the variation in log-transformed reported illnesses. This suggests that transmission mode and setting were meaningfully associated with reported outbreak size, but most variation in outbreak size was not explained by these two variables alone. Other factors, such as pathogen type, exposure size, outbreak detection, investigation practices, and reporting differences, may also influence the number of reported illnesses.
+
+Overall the regression diagnostic plots showed that the normality and homoscedasticity assumptions were only partially met, the regression results were interpreted cautiously. The regression model was used as a supplemental analysis to examine transmission mode and setting together, while the Kruskal-Wallis tests and descriptive comparisons were treated as the primary analyses.
+
+# Conclusions
+
+This report examined whether the reported number of illnesses differed by transmission mode and outbreak setting among outbreaks reported to the National Outbreak Reporting System. Overall, the results suggest that reported outbreak size varied substantially across both primary transmission modes and outbreak settings.
+
+For transmission mode, person-to-person outbreaks had the highest median number of reported illnesses per outbreak, while foodborne and animal contact outbreaks had lower median illness counts. The Kruskal-Wallis test showed a statistically significant difference in reported illnesses across transmission modes, indicating that the distribution of reported outbreak size was not the same across all groups. For outbreak setting, school, college, or university settings and long-term care, nursing home, or assisted living facilities generally had higher median illness counts than restaurant-related and private home settings. The Kruskal-Wallis test also showed a statistically significant difference in reported illnesses across setting groups.
+
+These findings are statistically significant, but their practical meaning should be interpreted carefully. The differences in medians suggest that some transmission modes and settings may be more commonly associated with larger reported outbreaks. This may be useful for public health surveillance and response because outbreak contexts with larger reported illness counts may require stronger prevention, early detection, and control efforts. However, the results do not show that transmission mode or setting alone causes larger outbreaks. Outbreak size may also be influenced by other factors not fully included in this analysis, such as pathogen type, exposure size, population vulnerability, outbreak detection, investigation practices, and reporting differences.
+
+This study has several limitations. First, NORS data represent reported outbreaks, not all outbreaks that occur. Outbreaks that are not detected, investigated, or reported would not be included, so the findings should be interpreted as patterns among reported outbreaks rather than estimates of true outbreak risk in the general population.[@white2022; @wikswo2022] Second, each row represents an outbreak-level record, so this analysis cannot make conclusions about individual-level risk. Third, outbreak setting had many categories, and less common categories were grouped as “Other” for readability, which may have reduced detail for some settings. Finally, the secondary regression analysis was interpreted cautiously because diagnostic plots showed that linear regression assumptions were only partially met.
+
+In conclusion, reported outbreak size differed by both transmission mode and outbreak setting in the NORS analytic dataset. Person-to-person outbreaks and outbreaks in school or long-term care-related settings tended to have larger reported illness counts than several other groups. These findings support the value of considering outbreak context in surveillance and response planning, while also highlighting the need for cautious interpretation because the analysis is observational and based on reported outbreak data.
+
+# AI use statement
+
+The report utilized ChatGPT to assist in correcting code errors and organizing information. All code was personally executed by the author and subjected to chart analysis.
+
+# Refference List
