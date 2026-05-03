@@ -1,0 +1,12 @@
+name: shiny_app
+title: shiny_app
+username: grace912
+account: grace912
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17280384
+bundleId: 11939687
+url: https://grace912.shinyapps.io/shiny_app/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
