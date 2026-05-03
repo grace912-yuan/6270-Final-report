@@ -1,0 +1,26 @@
+# RStudio files
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# R Markdown cache and output folders
+*_cache/
+*_files/
+
+# LaTeX intermediate files
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# macOS files
+.DS_Store
+
+# Shiny deployment files
+rsconnect/
